@@ -141,7 +141,7 @@ def load_history():
 
 
 # --- [4. 모델 설정] ---
-target_model = "gemini-1.5-flash"
+target_model = "gemini-2.5-flash"
 
 # 사이드바 안내 (선택 사항)
 st.sidebar.success(f"⚡ 쾌속 모드 연결: {target_model}")
@@ -238,4 +238,5 @@ if prompt := st.chat_input("아르만의 품 안에서 어떻게 반응하시겠
             
         except Exception as e:
             st.error(f"오류 발생: {e}")
+
 
