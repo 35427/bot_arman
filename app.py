@@ -240,7 +240,7 @@ if prompt := st.chat_input("아르만의 품 안에서 어떻게 반응하시겠
     with st.chat_message("user"):
         st.markdown(prompt)
     
-  with st.chat_message("assistant"):
+    with st.chat_message("assistant"):
         try:
             response = chat_session.send_message(prompt)
             ai_answer = response.text
@@ -257,4 +257,3 @@ if prompt := st.chat_input("아르만의 품 안에서 어떻게 반응하시겠
             
         except Exception as e:
             st.error(f"오류 발생: {e}")
-
