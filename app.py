@@ -139,31 +139,12 @@ def load_history():
             return json.load(f)
     return {"history": [], "likability": 5} # 초기 호감도 5% 시작
 
+
 # --- [4. 모델 설정] ---
-st.set_page_config(page_title="아르만디: 북부 대공의 저주", layout="wide")
+target_model = "gemini-1.5-flash"
 
-def get_best_model():
-    try:
-        # 사용 가능한 모델 목록 가져오기
-        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        # 1순위: 1.5-flash (한도가 넉넉함)
-        flash_models = [m for m in models if "1.5-flash" in m]
-        if flash_models: return flash_models[0]
-        
-        # 2순위: 3-flash (2026년 최신 표준 모델)
-        flash_models = [m for m in models if "3-flash" in m]
-        if flash_models: return flash_models[0]
-        
-        # 3순위: 그 외 아무 Flash 모델이나 선택
-        flash_models = [m for m in models if "flash" in m]
-        if flash_models: return flash_models[0]
-        
-        return models[0] # 정 안되면 첫 번째 모델 사용
-    except:
-        return "gemini-1.5-flash" # 에러 시 기본값
-
-target_model = get_best_model()
+# 사이드바 안내 (선택 사항)
+st.sidebar.success(f"⚡ 쾌속 모드 연결: {target_model}")
 
 # 사이드바에 현재 사용 중인 모델 이름 슬쩍 보여주기 (확인용)
 st.sidebar.info(f"Connected to: {target_model}")
@@ -257,3 +238,4 @@ if prompt := st.chat_input("아르만의 품 안에서 어떻게 반응하시겠
             
         except Exception as e:
             st.error(f"오류 발생: {e}")
+
