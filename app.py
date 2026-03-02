@@ -243,17 +243,23 @@ if prompt := st.chat_input("아르만의 품 안에서 어떻게 반응하시겠
     with st.chat_message("assistant"):
         try:
             response = chat_session.send_message(prompt)
-            ai_answer = response.text
             
-            # 💖 뒤의 숫자를 찾아 실시간 반영
-            match = re.search(r"💖\s*(\d+)", ai_answer)
-            if match:
-                st.session_state.likability = min(100, int(match.group(1)))
-            
-            st.markdown(ai_answer)
-            st.session_state.messages.append({"role": "model", "content": ai_answer})
-            save_history(st.session_state.messages, st.session_state.likability)
-            st.rerun() 
-            
+            # 💡 대답이 비어있는지 확인
+            if response.candidates and response.candidates[0].content.parts:
+                ai_answer = response.text
+                
+                match = re.search(r"💖\s*(\d+)", ai_answer)
+                if match:
+                    st.session_state.likability = min(100, int(match.group(1)))
+                
+                st.markdown(ai_answer)
+                st.session_state.messages.append({"role": "model", "content": ai_answer})
+                save_history(st.session_state.messages, st.session_state.likability)
+                st.rerun()
+            else:
+                # 💡 차단되었을 경우 이유 출력
+                st.warning("AI가 대답을 거부했습니다. (안전 필터 작동 가능성)")
+                st.write(response.prompt_feedback) # 차단 이유 확인용
+                
         except Exception as e:
             st.error(f"오류 발생: {e}")
