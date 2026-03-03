@@ -5,8 +5,9 @@ import os
 import re
 
 # --- [1. 설정 및 API 연결] ---
-API_KEY = st.secrets["GOOGLE_API_KEY"]
-genai.configure(api_key=API_KEY)
+# API 키는 하단 로테이션 로직에서 관리합니다.
+if "KEYS" in st.secrets:
+    genai.configure(api_key=st.secrets["KEYS"][0])
 HISTORY_FILE = "chat_history_armand.json" # 아르만 전용 파일명
 
 # --- [2. 시스템 지침] ---
@@ -209,34 +210,72 @@ if st.sidebar.button("대화 초기화"):
     st.session_state.clear()
     st.rerun()
 
+# --- [6. UI 출력 및 대화 처리 (키 로테이션 적용)] ---
 st.title("🗡️ 북부 대공: 아르만디 노르벨크")
 st.caption("황성 별관의 어둠 속에서 시작된 기묘한 공명.")
 
+# 기존 메시지 출력
 for msg in st.session_state.messages:
     with st.chat_message("assistant" if msg["role"] == "model" else "user"):
         st.markdown(msg["content"])
 
+# 채팅 입력 및 처리
 if prompt := st.chat_input("아르만의 품 안에서 어떻게 반응하시겠습니까?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
     
     with st.chat_message("assistant"):
-        try:
-            response = chat_session.send_message(prompt)
-            ai_answer = response.text
+        # Secrets에 등록한 KEYS 리스트를 가져옴
+        api_keys = st.secrets.get("KEYS", [])
+        if not api_keys:
+            st.error("Secrets에 'KEYS' 리스트가 설정되지 않았습니다.")
+            st.stop()
             
-            # 💖 뒤의 숫자를 찾아 실시간 반영
-            match = re.search(r"💖\s*(\d+)", ai_answer)
-            if match:
-                st.session_state.likability = min(100, int(match.group(1)))
-            
-            st.markdown(ai_answer)
-            st.session_state.messages.append({"role": "model", "content": ai_answer})
-            save_history(st.session_state.messages, st.session_state.likability)
-            st.rerun() 
-            
-        except Exception as e:
-            st.error(f"오류 발생: {e}")
+        success = False
+        
+        for key in api_keys:
+            try:
+                # 1. 현재 순서의 키로 API 재설정
+                genai.configure(api_key=key)
+                
+                # 2. 메시지 전송 시도
+                response = chat_session.send_message(prompt)
+                
+                if response.candidates:
+                    ai_answer = response.text
+                    
+                    # 💖 호감도 추출 및 반영
+                    match = re.search(r"💖\s*(\d+)", ai_answer)
+                    if match:
+                        st.session_state.likability = min(100, int(match.group(1)))
+                    
+                    st.markdown(ai_answer)
+                    st.session_state.messages.append({"role": "model", "content": ai_answer})
+                    
+                    # 3. 저장 (메시지와 호감도 함께 저장)
+                    save_history(st.session_state.messages, st.session_state.likability)
+                    
+                    success = True
+                    st.rerun() 
+                    break 
+                
+            except Exception as e:
+                # 한도 초과(429) 에러인 경우에만 다음 키로 넘어가기
+                if "429" in str(e) or "ResourceExhausted" in str(e):
+                    continue 
+                else:
+                    st.error(f"오류 발생: {e}")
+                    break
+
+        if not success:
+            st.error("🚨 모든 API 키의 한도가 초과되었습니다! 새 키를 추가하거나 내일 다시 시도해주세요.")
+
+# 사이드바 초기화 버튼
+if st.sidebar.button("대화 초기화 (기록 삭제)"):
+    if os.path.exists(HISTORY_FILE): 
+        os.remove(HISTORY_FILE)
+    st.session_state.clear()
+    st.rerun()
 
 
