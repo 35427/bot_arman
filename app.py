@@ -222,17 +222,31 @@ if prompt := st.chat_input("대화를 이어가세요..."):
         st.markdown(prompt)
     
     with st.chat_message("assistant"):
-        api_keys = st.secrets.get("KEYS", [])
-        if not api_keys:
-            st.error("Secrets에 'KEYS' 리스트가 없습니다.")
-            st.stop()
-
         success = False
-        # 등록된 모든 키를 하나씩 시도합니다.
+        
+        # 1. 현재까지의 대화 기록을 Gemini 형식으로 변환
+        gemini_history = []
+        for msg in st.session_state.messages[:-1]: # 마지막 질문 제외
+            gemini_history.append({"role": msg["role"], "parts": [msg["content"]]})
+
+        # 2. 등록된 9개의 키를 하나씩 시도
         for key in api_keys:
             try:
-                genai.configure(api_key=key) # 키 교체
-                response = chat_session.send_message(prompt)
+                # [핵심] 키 설정부터 모델 생성, 세션 시작까지 루프 안에서 새로 수행
+                genai.configure(api_key=key) 
+                
+                # 모델 다시 생성 (새 키 적용)
+                current_model = genai.GenerativeModel(
+                    model_name=target_model,
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    safety_settings=safety_settings
+                )
+                
+                # 세션 다시 시작 (이전 기록을 들고 새 시동 걸기)
+                current_chat = current_model.start_chat(history=gemini_history)
+                
+                # 메시지 전송
+                response = current_chat.send_message(prompt)
                 
                 if response.candidates:
                     ai_answer = response.text
@@ -240,11 +254,12 @@ if prompt := st.chat_input("대화를 이어가세요..."):
                     st.session_state.messages.append({"role": "model", "content": ai_answer})
                     save_history(st.session_state.messages)
                     success = True
-                    break # 성공하면 루프 탈출
+                    break # 성공하면 다음 키로 안 가고 루프 탈출!
+            
             except Exception as e:
-                # 429(한도 초과) 에러면 다음 키로 이동
+                # 429(한도 초과) 에러면 다음 키로 패스
                 if "429" in str(e) or "ResourceExhausted" in str(e):
-                    continue
+                    continue 
                 else:
                     st.error(f"오류 발생: {e}")
                     break
@@ -259,6 +274,7 @@ if st.sidebar.button("대화 초기화 (시트 비우기)"):
         st.rerun()
     except Exception as e:
         st.error(f"초기화 실패: {e}")
+
 
 
 
