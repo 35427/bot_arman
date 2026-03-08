@@ -326,13 +326,23 @@ def load_history():
         return []
 
 # --- [4. 모델 설정] ---
+# --- [4. 모델 설정] ---
 st.set_page_config(page_title="제드 레이크", layout="wide")
 
 try:
+    # 차우석 코드와 동일한 모델 탐색 로직
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     target_model = available_models[0] if available_models else "models/gemini-1.5-flash"
 except:
     target_model = "models/gemini-1.5-flash"
+
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+safety_settings = {
+    genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+    genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: genai.types.HarmBlockThreshold.BLOCK_NONE,
+    genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+    genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: genai.types.HarmBlockThreshold.BLOCK_NONE,
+}
 
 # --- [안전 설정: 수위 제한 완화] ---
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
@@ -438,21 +448,23 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
         
 # --- [7. 채팅 입력 및 API 키 로테이션 로직] ---
+# --- [7. 채팅 입력 및 API 키 로테이션 로직] ---
                
 if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
-    # 가. [일상 대화 점수] 하루 한 번 무조건 +1 (하트 소모 X)
+    # 가. [수치 업데이트] 일상 대화(+1) 및 특별 행동(+3, 하트소모)
+    # 1. 일상 대화 (하루 한 번 보너스)
     if not st.session_state.daily_talk_done:
         st.session_state.favorability += 1
         st.session_state.daily_talk_done = True
 
-    # 나. [특별 행동 점수] 선물/데이트 시 하트 소모 및 추가 점수
+    # 2. 특별 행동 (인내심 소모)
     action_keywords = ["선물", "데이트", "결투", "사냥", "주사위"]
     if any(word in prompt for word in action_keywords):
         if st.session_state.patience > 0:
             st.session_state.patience -= 1 # 하트 소모
-            st.session_state.favorability += 3 # 행동 점수 크게 상승
+            st.session_state.favorability += 3 # 행동 점수 추가
             
-    # 다. [나이별 상한선 강제 적용] 점수가 너무 많이 올랐을 경우 깎기
+    # 3. 나이별 호감도 상한선 강제 적용 (서사 속도 조절)
     age = st.session_state.age
     fav = st.session_state.favorability
     if age == 13 and fav > 25: st.session_state.favorability = 25
@@ -460,50 +472,48 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     elif (age == 16 or age == 17) and fav > 85: st.session_state.favorability = 85
     elif age >= 18 and fav > 100: st.session_state.favorability = 100
 
-    
- 
-               
- 
-    # 1. 유저 메시지 표시 및 저장
+    # 나. 유저 메시지 표시 및 저장
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
     
+    # 다. 인공지능 답변 생성부
     with st.chat_message("assistant", avatar="zed_avatar.png"):
         success = False
         
-        # [중요] 제드에게 현재 상태를 주입 (인내심이 0이면 제드가 대화를 끊도록 유도)
         fav_score = st.session_state.favorability
         patience_info = f"현재 레일리의 인내심: {st.session_state.patience}/3"
         system_warning = " (인내심이 소진되었으니 대화를 마무리해.)" if st.session_state.patience == 0 else ""
+        
+        # 결혼 이후 호칭 및 태도 변화 지침
+        marriage_context = ""
+        if fav_score >= 100 and age >= 18:
+            marriage_context = "너희는 이제 결혼한 부부야. 레일리를 '레일리' 혹은 '당신'이라고 부르며 깊은 애정을 담아 대화해."
+
         age_context = (
-            f"(시스템 알림: 레일리 {st.session_state.age}세, {st.session_state.season}. "
-            f"인내심 {st.session_state.patience}/3, 제드 호감도 {fav_score}%.{system_warning} " # 여기 변수 추가
-            f"호감도가 25, 50, 85%에 도달했을 때만 설정된 이벤트를 소설로 진행해.)\n\n"
+            f"(시스템 알림: 레일리 {age}세, {st.session_state.season}. "
+            f"인내심 {st.session_state.patience}/3, 제드 호감도 {fav_score}%.{system_warning} "
+            f"호감도가 25, 50, 85%에 도달했을 때만 설정된 이벤트를 진행해. {marriage_context})\n\n"
         )
-        # 2. 제미나이 히스토리 구성 (현재 질문 제외한 이전 대화들)
+
+        # Gemini용 히스토리 구성
         gemini_history = []
         for msg in st.session_state.messages[:-1]:
             gemini_history.append({"role": msg["role"], "parts": [msg["content"]]})
 
-        # 3. 9개 키를 돌리며 대화 시도
+        # 9개 키를 돌리며 대화 시도 (차우석 코드 로직 적용)
         for key in api_keys:
             try:
-                # [중요] 키가 바뀔 때마다 설정을 새로 갱신
                 genai.configure(api_key=key)
                 
-                # 모델 인스턴스 생성 (1.5 Pro 권장)
-                # target_model 변수가 앞에서 정의되지 않았다면 "gemini-1.5-pro"를 직접 쓰세요.
+                # [수정완료] hardcoding 대신 target_model 변수 사용
                 current_model = genai.GenerativeModel(
-                    model_name="gemini-1.5-pro", 
+                    model_name=target_model, 
                     system_instruction=SYSTEM_INSTRUCTION,
                     safety_settings=safety_settings
                 )
                 
-                # 새 키와 히스토리로 세션 시작
                 current_chat = current_model.start_chat(history=gemini_history)
-                
-                # 나이 정보와 함께 메시지 전송
                 response = current_chat.send_message(age_context + prompt)
                 
                 if response.candidates:
@@ -512,11 +522,10 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
                     st.session_state.messages.append({"role": "model", "content": ai_answer})
                     save_history(st.session_state.messages)
                     success = True
-                    st.rerun()
-                    break # 성공하면 루프 탈출
+                    st.rerun() # 수치 반영을 위해 리런
+                    break
             
             except Exception as e:
-                # 한도 초과(429) 에러면 다음 키로 패스
                 if "429" in str(e) or "ResourceExhausted" in str(e):
                     continue 
                 else:
@@ -524,9 +533,11 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
                     break
 
         if not success:
-            st.error("🚨 보유한 모든 API 키의 할당량이 소진되었습니다. 내일 다시 시도하거나 새 키를 추가하세요.")
+            st.error("🚨 모든 API 키의 할당량이 소진되었습니다. 내일 다시 시도하세요.")
 
+               
 
+        
 
 
 
