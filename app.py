@@ -303,53 +303,53 @@ def connect_gsheet():
     return client.open_by_key(st.secrets["SPREADSHEET_ID"]).sheet1
 
 # --- [저장 함수 수정] ---
+# --- [저장 함수 수정] ---
 def save_history(history):
     try:
         sheet = connect_gsheet()
         sheet.clear()
         
-        # 1. 현재 상태 수치들을 한 줄의 텍스트(JSON)로 변환
+        # 저장할 모든 상태 정보 (인내심 추가!)
         stats = {
             "age": st.session_state.age,
             "month": st.session_state.month,
             "day": st.session_state.day,
             "year_index": st.session_state.year_index,
-            "favorability": st.session_state.favorability
+            "favorability": st.session_state.favorability,
+            "patience": st.session_state.patience, # 추가
+            "daily_talk_done": st.session_state.daily_talk_done # 추가
         }
         
-        # 2. 첫 번째 줄(헤더 다음)에 상태 정보를 저장
         data_to_save = [["role", "content"], ["system_stats", json.dumps(stats)]]
-        
-        # 3. 그 뒤에 대화 내용 추가
         for msg in history:
             data_to_save.append([msg["role"], msg["content"]])
         
         sheet.update(values=data_to_save, range_name="A1")
     except Exception as e:
-        st.error(f"구글 시트 저장 실패: {e}")
+        st.error(f"저장 실패: {e}")
 
 # --- [불러오기 함수 수정] ---
 def load_history():
     try:
         sheet = connect_gsheet()
         data = sheet.get_all_records()
-        if not data:
+        if not data or data[0]["role"] != "system_stats":
             return None
         
-        # 첫 번째 줄에 숨겨둔 상태 정보 확인
-        if data[0]["role"] == "system_stats":
-            stats = json.loads(data[0]["content"])
-            st.session_state.age = stats["age"]
-            st.session_state.month = stats["month"]
-            st.session_state.day = stats["day"]
-            st.session_state.year_index = stats["year_index"]
-            st.session_state.favorability = stats["favorability"]
-            # 상태 정보 줄은 대화창에 띄우지 않게 제거
-            return [{"role": row["role"], "content": row["content"]} for row in data[1:]]
+        # 시트에서 상태 정보 복구
+        stats = json.loads(data[0]["content"])
+        st.session_state.age = stats.get("age", 13)
+        st.session_state.month = stats.get("month", 1)
+        st.session_state.day = stats.get("day", 1)
+        st.session_state.year_index = stats.get("year_index", 3)
+        st.session_state.favorability = stats.get("favorability", 0)
+        st.session_state.patience = stats.get("patience", 3) # 복구 성공!
+        st.session_state.daily_talk_done = stats.get("daily_talk_done", False)
         
-        return [{"role": row["role"], "content": row["content"]} for row in data]
+        return [{"role": row["role"], "content": row["content"]} for row in data[1:]]
     except:
         return None
+
 
 
 # --- [4. 모델 설정] ---
