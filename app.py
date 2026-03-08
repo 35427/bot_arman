@@ -360,26 +360,26 @@ model = genai.GenerativeModel(
     safety_settings=safety_settings
 )
 
-# --- [5. 채팅 세션 관리] ---
+# --- [5. 채팅 세션 및 상태 관리] ---
+# --- [5. 채팅 세션 및 상태 관리] ---
 if "messages" not in st.session_state:
     saved_messages = load_history()
-    if saved_messages:
-        st.session_state.messages = saved_messages
-        # 저장된 기록에서 나이를 유추하거나 기본값 설정
+    
+    # [버그수정] 이미 값이 있으면 유지하고, 없을 때만 초기화
+    if "age" not in st.session_state:
         st.session_state.age = 13
-        st.session_state.season = "동화년 (겨울)"
-        st.session_state.patience = 3 # 이 줄을 추가하세요
+        st.session_state.month = 1
+        st.session_state.day = 1
+        st.session_state.year_names = ["춘화년", "하화년", "추화년", "동화년"]
+        st.session_state.year_index = 3  # 13세 동화년 시작
+        st.session_state.patience = 3
         st.session_state.favorability = 0
         st.session_state.daily_talk_done = False
 
-        
+    if saved_messages:
+        st.session_state.messages = saved_messages
     else:
-        st.session_state.age = 13
-        st.session_state.season = "동화년 (겨울)"
-        st.session_state.patience = 3 # 이 줄을 추가하세요
-        st.session_state.favorability = 0
-        st.session_state.daily_talk_done = False
-        # 프롤로그 텍스트 설정
+        
         PROLOGUE_TEXT = """ 화산국의 뜨거운 햇살이 중앙광장의 대리석 바닥을 달구던 하화년의 어느 날이었다. 세인트 엘모 기사 학교에 갓 입학한 13살의 레일리, 당신은 영주 레베사처럼 멋진 기사가 되겠다는 부푼 꿈을 안고 광장을 가로지르고 있었다. 
 
 그때였다. 상점가 구석, 어두운 골목 입구에 비스듬히 기대어 앉아 활시위를 점검하던 한 소년이 당신의 시선을 사로잡았다. 날카롭게 뻗친 흑발에 시리도록 차가운 녹색 눈동자. 그는 당신 또래의 아이들과는 확연히 다른, 짐승 같은 날 선 분위기를 풍기고 있었다. 
@@ -401,27 +401,46 @@ if "messages" not in st.session_state:
 
 # --- [6. UI 및 사이드바 출력] ---
 # 사이드바 설정
+
+# --- [6. UI 및 사이드바 출력] ---
+
+# 현재 연도 이름 가져오기
+current_year_name = st.session_state.year_names[st.session_state.year_index]
+
 st.sidebar.title("📊 레일리 상태창")
-st.sidebar.write(f"**현재 나이:** {st.session_state.age}세")
-st.sidebar.write(f"**현재 시기:** {st.session_state.season}")
-st.sidebar.info(f"**오늘의 인내심:** {'❤️' * st.session_state.patience}")
-# 사이드바 설정 부분에 추가
-st.sidebar.write(f"**제드의 호감도:** {st.session_state.favorability}%")
+st.sidebar.subheader(f"✨ {current_year_name} ({st.session_state.age}세)")
+st.sidebar.info(f"📅 **{st.session_state.month}월 {st.session_state.day}일**")
+st.sidebar.write(f"**오늘의 인내심:** {'❤️' * st.session_state.patience}")
+st.sidebar.write(f"**제드 호감도:** {st.session_state.favorability}%")
+
+# [핵심] 하루 지나기 버튼 로직
+if st.sidebar.button("☀️ 하루 지나기 (인내심 리셋)"):
+    # 1. 일(Day) 증가 (한 달을 30일로 가정)
+    st.session_state.day += 1
+    
+    if st.session_state.day > 30:
+        st.session_state.day = 1
+        st.session_state.month += 1
+    
+    # 2. 월(Month)이 12월을 넘어가면 (새해 첫날)
+    if st.session_state.month > 12:
+        st.session_state.month = 1
+        st.session_state.age += 1 # 나이 먹음
+        
+        # 연도 이름 변경 (춘->하->추->동 순환)
+        st.session_state.year_index = (st.session_state.year_index + 1) % 4
+    
+    # 3. 매일 수치 리셋
+    st.session_state.patience = 3
+    st.session_state.daily_talk_done = False
+    st.rerun()
+
+
 
 # 계절 리스트 (순환용)
 seasons_list = ["춘화년 (봄)", "하화년 (여름)", "추화년 (가을)", "동화년 (겨울)"]
 
-if st.sidebar.button("🕒 시간 흐르기 (다음 계절)"):
-    curr_idx = seasons_list.index(st.session_state.season)
-    if curr_idx == 3: # 겨울이면 다음 해 봄으로
-        st.session_state.season = seasons_list[0]
-        st.session_state.age += 1
-    else:
-        st.session_state.season = seasons_list[curr_idx + 1]
 
-    st.session_state.patience = 3
-    st.session_state.daily_talk_done = False # 이 줄을 추가하세요
-    st.rerun()
 
     
 
@@ -458,7 +477,7 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
         st.session_state.daily_talk_done = True
 
     # 2. 특별 행동 (인내심 소모)
-    action_keywords = ["선물", "데이트", "결투", "사냥", "주사위"]
+    action_keywords = ["선물", "데이트", "결투", "토론"]
     if any(word in prompt for word in action_keywords):
         if st.session_state.patience > 0:
             st.session_state.patience -= 1 # 하트 소모
@@ -490,11 +509,18 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
         if fav_score >= 100 and age >= 18:
             marriage_context = "너희는 이제 결혼한 부부야. 레일리를 '레일리' 혹은 '당신'이라고 부르며 깊은 애정을 담아 대화해."
 
+                # 섹션 7 내부의 age_context 수정
+        
+        
+        # 기존 코드에서 marriage_context 뒤에 오는 age_context를 이렇게 바꾸세요
         age_context = (
-            f"(시스템 알림: 레일리 {age}세, {st.session_state.season}. "
-            f"인내심 {st.session_state.patience}/3, 제드 호감도 {fav_score}%.{system_warning} "
-            f"호감도가 25, 50, 85%에 도달했을 때만 설정된 이벤트를 진행해. {marriage_context})\n\n"
+            f"(시스템 알림: 오늘은 {current_year_name} {st.session_state.month}월 {st.session_state.day}일이야. "
+            f"레일리는 현재 {st.session_state.age}세이고, 제드 호감도는 {fav_score}%야. "
+            f"인내심이 {st.session_state.patience}/3 남았어.{system_warning} "
+            f"호감도 수치에 따른 이벤트를 소설 형식으로 진행해. {marriage_context})\n\n" # 맨 뒤에 변수 추가!
         )
+
+        
 
         # Gemini용 히스토리 구성
         gemini_history = []
