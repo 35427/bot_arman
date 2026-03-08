@@ -503,9 +503,21 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     # 가. [수치 업데이트] 일상 대화(+1) 및 특별 행동(+3, 하트소모)
     # 1. 일상 대화 (하루 한 번 보너스)
-    if not st.session_state.daily_talk_done:
-        st.session_state.favorability += 1
-        st.session_state.daily_talk_done = True
+        # 1. 자동 보너스(+1) 삭제! (말 안 걸면 안 오름)
+    
+    # 2. 의도적인 상호작용 키워드 세분화
+    # 단순 단어 포함이 아니라 '행동'을 지시했을 때만 오르도록 구체화
+    action_plus_3 = ["선물하기", "데이트신청", "결투신청", "주사위게임"]
+    action_plus_1 = ["인사하기", "대화하기", "질문하기"] # 가벼운 소통은 1점만
+
+    if any(word in prompt for word in action_plus_3):
+        if st.session_state.patience > 0:
+            st.session_state.patience -= 1
+            st.session_state.favorability += 3
+    elif any(word in prompt for word in action_plus_1):
+        if not st.session_state.daily_talk_done:
+            st.session_state.favorability += 1
+            st.session_state.daily_talk_done = True
 
     # 2. 특별 행동 (인내심 소모)
     action_keywords = ["선물", "데이트", "결투", "토론"]
