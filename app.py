@@ -439,6 +439,7 @@ if "messages" not in st.session_state:
 # --- [6. UI 및 사이드바 출력] ---
 
 # 현재 연도 이름 가져오기
+# --- [6. UI 및 사이드바 출력 수정] ---
 current_year_name = st.session_state.year_names[st.session_state.year_index]
 
 st.sidebar.title("📊 레일리 상태창")
@@ -447,27 +448,23 @@ st.sidebar.info(f"📅 **{st.session_state.month}월 {st.session_state.day}일**
 st.sidebar.write(f"**오늘의 인내심:** {'❤️' * st.session_state.patience}")
 st.sidebar.write(f"**제드 호감도:** {st.session_state.favorability}%")
 
-# [핵심] 하루 지나기 버튼 로직
 if st.sidebar.button("☀️ 하루 지나기 (인내심 리셋)"):
-    # 1. 일(Day) 증가 (한 달을 30일로 가정)
     st.session_state.day += 1
-    
     if st.session_state.day > 30:
         st.session_state.day = 1
         st.session_state.month += 1
-    
-    # 2. 월(Month)이 12월을 넘어가면 (새해 첫날)
     if st.session_state.month > 12:
         st.session_state.month = 1
-        st.session_state.age += 1 # 나이 먹음
-        
-        # 연도 이름 변경 (춘->하->추->동 순환)
+        st.session_state.age += 1
         st.session_state.year_index = (st.session_state.year_index + 1) % 4
     
-    # 3. 매일 수치 리셋
     st.session_state.patience = 3
     st.session_state.daily_talk_done = False
+    
+    # [수정] 날짜가 바뀌었으니 즉시 구글 시트에 현재 상태를 저장합니다!
+    save_history(st.session_state.messages)
     st.rerun()
+
 
 
 
