@@ -308,12 +308,22 @@ def save_history(history):
         sheet = connect_gsheet()
         sheet.clear()
         
-        # 데이터를 한꺼번에 리스트로 만듭니다. (속도 향상 및 에러 방지)
-        data_to_save = [["role", "content"]]
+        # 1. 현재 상태 수치들을 한 줄의 텍스트(JSON)로 변환
+        stats = {
+            "age": st.session_state.age,
+            "month": st.session_state.month,
+            "day": st.session_state.day,
+            "year_index": st.session_state.year_index,
+            "favorability": st.session_state.favorability
+        }
+        
+        # 2. 첫 번째 줄(헤더 다음)에 상태 정보를 저장
+        data_to_save = [["role", "content"], ["system_stats", json.dumps(stats)]]
+        
+        # 3. 그 뒤에 대화 내용 추가
         for msg in history:
             data_to_save.append([msg["role"], msg["content"]])
         
-        # 단 한 번의 호출로 시트 전체를 업데이트합니다.
         sheet.update(values=data_to_save, range_name="A1")
     except Exception as e:
         st.error(f"구글 시트 저장 실패: {e}")
@@ -322,13 +332,25 @@ def save_history(history):
 def load_history():
     try:
         sheet = connect_gsheet()
-        data = sheet.get_all_records() # 헤더 기준 데이터를 가져옴
+        data = sheet.get_all_records()
         if not data:
-            return []
+            return None
+        
+        # 첫 번째 줄에 숨겨둔 상태 정보 확인
+        if data[0]["role"] == "system_stats":
+            stats = json.loads(data[0]["content"])
+            st.session_state.age = stats["age"]
+            st.session_state.month = stats["month"]
+            st.session_state.day = stats["day"]
+            st.session_state.year_index = stats["year_index"]
+            st.session_state.favorability = stats["favorability"]
+            # 상태 정보 줄은 대화창에 띄우지 않게 제거
+            return [{"role": row["role"], "content": row["content"]} for row in data[1:]]
+        
         return [{"role": row["role"], "content": row["content"]} for row in data]
-    except Exception as e:
-        # 시트가 비어있거나 처음일 경우
-        return []
+    except:
+        return None
+
 
 # --- [4. 모델 설정] ---
 # --- [4. 모델 설정] ---
@@ -368,27 +390,30 @@ model = genai.GenerativeModel(
 # --- [5. 채팅 세션 및 상태 관리] ---
 # --- [5. 채팅 세션 및 상태 관리] ---
 if "messages" not in st.session_state:
+    # 1. 기본값들 리스트는 무조건 먼저 선언 (에러 방지)
+    st.session_state.year_names = ["춘화년", "하화년", "추화년", "동화년"]
+    st.session_state.ray_birth_month = 3 
+    st.session_state.ray_birth_day = 30
+
+    # 2. 시트에서 기록과 수치를 불러옵니다.
+    # (수정된 load_history가 시트의 수치를 st.session_state에 자동으로 넣어줄 겁니다)
     saved_messages = load_history()
     
-    # [버그수정] 이미 값이 있으면 유지하고, 없을 때만 초기화
+    # 3. 만약 시트에 데이터가 없는 '완전 처음'인 경우에만 초기값을 설정합니다.
     if "age" not in st.session_state:
-                # 레일리의 생일 설정 (원하는 날짜로 숫자를 바꿔보세요)
-        st.session_state.ray_birth_month = 3 
-        st.session_state.ray_birth_day = 30
-
         st.session_state.age = 13
         st.session_state.month = 1
         st.session_state.day = 1
-        st.session_state.year_names = ["춘화년", "하화년", "추화년", "동화년"]
         st.session_state.year_index = 3  # 13세 동화년 시작
         st.session_state.patience = 3
         st.session_state.favorability = 0
         st.session_state.daily_talk_done = False
 
+    # 4. 메시지 출력 설정
     if saved_messages:
         st.session_state.messages = saved_messages
     else:
-        
+        # 프롤로그 텍스트 (내용이 길어서 생략, 기존 PROLOGUE_TEXT를 그대로 쓰세요)
         PROLOGUE_TEXT = """ 화산국의 뜨거운 햇살이 중앙광장의 대리석 바닥을 달구던 하화년의 어느 날이었다. 세인트 엘모 기사 학교에 갓 입학한 13살의 레일리, 당신은 영주 레베사처럼 멋진 기사가 되겠다는 부푼 꿈을 안고 광장을 가로지르고 있었다. 
 
 그때였다. 상점가 구석, 어두운 골목 입구에 비스듬히 기대어 앉아 활시위를 점검하던 한 소년이 당신의 시선을 사로잡았다. 날카롭게 뻗친 흑발에 시리도록 차가운 녹색 눈동자. 그는 당신 또래의 아이들과는 확연히 다른, 짐승 같은 날 선 분위기를 풍기고 있었다. 
