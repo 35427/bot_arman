@@ -435,7 +435,7 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    with st.chat_message("assistant", avatar="zed_avatar.png")
+    with st.chat_message("assistant", avatar="zed_avatar.png"):
         success = False
         # [중요] 제드에게 현재 상태를 주입 (인내심이 0이면 제드가 대화를 끊도록 유도)
         patience_status = f"현재 레일리의 인내심: {st.session_state.patience}/3"
@@ -498,6 +498,7 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
 
         if not success:
             st.error("🚨 보유한 모든 API 키의 할당량이 소진되었습니다. 내일 다시 시도하거나 새 키를 추가하세요.")
+
 
 
 
