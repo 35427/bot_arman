@@ -413,7 +413,7 @@ if st.sidebar.button("🕒 시간 흐르기 (다음 계절)"):
     st.session_state.daily_talk_done = False # 이 줄을 추가하세요
     st.rerun()
 
-    st.rerun()
+    
 
 if st.sidebar.button("🧹 대화 초기화 (시트 비우기)"):
     try:
