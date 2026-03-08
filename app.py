@@ -507,12 +507,14 @@ for msg in st.session_state.messages:
 # --- [7. 채팅 입력 및 API 키 로테이션 로직] ---
 # # --- [7. 채팅 입력 및 로직 통합] ---
 
+# --- [7. 채팅 입력 및 API 로직 통합] ---
+
 if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
-    # 1. 수치 업데이트 (중복 방지를 위해 if-elif 구조 사용)
+    # 1. 수치 업데이트 로직 (중복 방지 및 행동 기반)
     plus_3 = ["선물", "데이트", "결투", "토론", "주사위"]
     plus_1 = ["인사", "대화", "질문", "안녕", "말 걸기"]
 
-    # (1) +3점 행동: 하트 소모
+    # (1) +3점 행동: 인내심(하트) 소모
     if any(word in prompt for word in plus_3):
         if st.session_state.patience > 0:
             st.session_state.patience -= 1
@@ -536,55 +538,48 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # 4. 인공지능 답변 생성부 시작
+    # 4. 인공지능 답변 생성부
     with st.chat_message("assistant", avatar="zed_avatar.png"):
         success = False
-        fav_score = st.session_state.favorability
-        age = st.session_state.age # 여기서 age를 다시 정의해줘야 아래 로직이 에러 안 남
         
-        # --- 여기서부터 marriage_context 로직 시작 ---
-
-        # 결혼 이후 호칭 및 태도 변화 지침
+        # [변수 정의] 아래 지침(Context)에서 사용할 변수들을 먼저 계산합니다.
+        fav_score = st.session_state.favorability
+        age = st.session_state.age
+        current_year_name = st.session_state.year_names[st.session_state.year_index]
+        
+        # (1) 인내심 경고
+        system_warning = " (인내심이 소진되었으니 대화를 마무리해.)" if st.session_state.patience == 0 else ""
+        
+        # (2) 결혼 지침
         marriage_context = ""
         if fav_score >= 100 and age >= 18:
             marriage_context = "너희는 이제 결혼한 부부야. 레일리를 '레일리' 혹은 '당신'이라고 부르며 깊은 애정을 담아 대화해."
 
-                # 섹션 7 내부의 age_context 수정
-        
-                # 생일 체크 로직
+        # (3) 생일 체크 로직
         is_birthday = (st.session_state.month == st.session_state.ray_birth_month and 
                        st.session_state.day == st.session_state.ray_birth_day)
         
         birthday_context = ""
-        # 호감도 25% (지인) 이상일 때만 생일 축하 지침 활성화
-        if is_birthday and st.session_state.favorability >= 25:
-            birthday_context = f"오늘은 레일리의 생일이야! 제드는 평소처럼 무뚝뚝하지만, 현재 {fav_score}% 지인/친구/단짝/연인/부부의 관계니까 관계에 맞춰서 특별히 생일을 축하하거나 선물을 주는 묘사를 소설에 꼭 넣어줘."
+        if is_birthday and fav_score >= 25:
+            birthday_context = f"오늘은 레일리의 생일이야! 제드는 무뚝뚝하지만, 현재 {fav_score}% 관계(지인/친구/단짝/연인/부부)에 맞춰서 특별히 생일을 축하하거나 선물을 주는 묘사를 꼭 넣어줘."
 
-        # 최종 age_context에 birthday_context 추가
+        # [최종 합체] 제드에게 전달할 시스템 알림 (딱 하나만 정의)
         age_context = (
-            f"(시스템 알림: 오늘은 {current_year_name} {st.session_state.month}월 {st.session_state.day}일. "
-            f"레일리는 {st.session_state.age}세, 호감도 {st.session_state.favorability}%야. "
+            f"(시스템 알림: 오늘은 {current_year_name} {st.session_state.month}월 {st.session_state.day}일이야. "
+            f"레일리는 현재 {age}세이고, 제드 호감도는 {fav_score}%야. "
+            f"인내심은 {st.session_state.patience}/3 남았어. "
             f"{birthday_context} {marriage_context}{system_warning})\n\n"
         )
-
-        # 기존 코드에서 marriage_context 뒤에 오는 age_context를 이렇게 바꾸세요
-                # [최종 합체] 제드에게 전달할 시스템 알림
-        # age_context = f"(시스템 알림: 오늘은 {current_year_name} {st.session_state.month}월 {st.session_state.day}일이야. 레일리는 현재 {age}세이고, 제드 호감도는 {fav_score}%야. 인내심은 {st.session_state.patience}/3 남았어. {birthday_context} {marriage_context}{system_warning})\n\n"
-
-
-        
 
         # Gemini용 히스토리 구성
         gemini_history = []
         for msg in st.session_state.messages[:-1]:
             gemini_history.append({"role": msg["role"], "parts": [msg["content"]]})
 
-        # 9개 키를 돌리며 대화 시도 (차우석 코드 로직 적용)
+        # API 키 로테이션 및 대화 시도
         for key in api_keys:
             try:
                 genai.configure(api_key=key)
-                
-                # [수정완료] hardcoding 대신 target_model 변수 사용
                 current_model = genai.GenerativeModel(
                     model_name=target_model, 
                     system_instruction=SYSTEM_INSTRUCTION,
@@ -598,9 +593,12 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
                     ai_answer = response.text
                     st.markdown(ai_answer)
                     st.session_state.messages.append({"role": "model", "content": ai_answer})
+                    
+                    # [중요] 대화 성공 시 구글 시트에 현재 모든 상태 저장
                     save_history(st.session_state.messages)
+                    
                     success = True
-                    st.rerun() # 수치 반영을 위해 리런
+                    st.rerun() 
                     break
             
             except Exception as e:
@@ -612,10 +610,6 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
 
         if not success:
             st.error("🚨 모든 API 키의 할당량이 소진되었습니다. 내일 다시 시도하세요.")
-
-               
-
-        
 
 
 
