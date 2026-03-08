@@ -367,6 +367,10 @@ if "messages" not in st.session_state:
     
     # [버그수정] 이미 값이 있으면 유지하고, 없을 때만 초기화
     if "age" not in st.session_state:
+                # 레일리의 생일 설정 (원하는 날짜로 숫자를 바꿔보세요)
+        st.session_state.ray_birth_month = 3 
+        st.session_state.ray_birth_day = 30
+
         st.session_state.age = 13
         st.session_state.month = 1
         st.session_state.day = 1
@@ -500,6 +504,9 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     with st.chat_message("assistant", avatar="zed_avatar.png"):
         success = False
         
+        
+        age = st.session_state.age
+
         fav_score = st.session_state.favorability
         patience_info = f"현재 레일리의 인내심: {st.session_state.patience}/3"
         system_warning = " (인내심이 소진되었으니 대화를 마무리해.)" if st.session_state.patience == 0 else ""
@@ -511,14 +518,26 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
 
                 # 섹션 7 내부의 age_context 수정
         
+                # 생일 체크 로직
+        is_birthday = (st.session_state.month == st.session_state.ray_birth_month and 
+                       st.session_state.day == st.session_state.ray_birth_day)
         
-        # 기존 코드에서 marriage_context 뒤에 오는 age_context를 이렇게 바꾸세요
+        birthday_context = ""
+        # 호감도 25% (지인) 이상일 때만 생일 축하 지침 활성화
+        if is_birthday and st.session_state.favorability >= 25:
+            birthday_context = f"오늘은 레일리의 생일이야! 제드는 평소처럼 무뚝뚝하지만, 현재 {fav_score}% 지인/친구/단짝/연인/부부의 관계니까 관계에 맞춰서 특별히 생일을 축하하거나 선물을 주는 묘사를 소설에 꼭 넣어줘."
+
+        # 최종 age_context에 birthday_context 추가
         age_context = (
-            f"(시스템 알림: 오늘은 {current_year_name} {st.session_state.month}월 {st.session_state.day}일이야. "
-            f"레일리는 현재 {st.session_state.age}세이고, 제드 호감도는 {fav_score}%야. "
-            f"인내심이 {st.session_state.patience}/3 남았어.{system_warning} "
-            f"호감도 수치에 따른 이벤트를 소설 형식으로 진행해. {marriage_context})\n\n" # 맨 뒤에 변수 추가!
+            f"(시스템 알림: 오늘은 {current_year_name} {st.session_state.month}월 {st.session_state.day}일. "
+            f"레일리는 {st.session_state.age}세, 호감도 {st.session_state.favorability}%야. "
+            f"{birthday_context} {marriage_context}{system_warning})\n\n"
         )
+
+        # 기존 코드에서 marriage_context 뒤에 오는 age_context를 이렇게 바꾸세요
+                # [최종 합체] 제드에게 전달할 시스템 알림
+        # age_context = f"(시스템 알림: 오늘은 {current_year_name} {st.session_state.month}월 {st.session_state.day}일이야. 레일리는 현재 {age}세이고, 제드 호감도는 {fav_score}%야. 인내심은 {st.session_state.patience}/3 남았어. {birthday_context} {marriage_context}{system_warning})\n\n"
+
 
         
 
