@@ -498,35 +498,25 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
         
 # --- [7. 채팅 입력 및 API 키 로테이션 로직] ---
-# --- [7. 채팅 입력 및 API 키 로테이션 로직] ---
-               
-if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
-    # 가. [수치 업데이트] 일상 대화(+1) 및 특별 행동(+3, 하트소모)
-    # 1. 일상 대화 (하루 한 번 보너스)
-        # 1. 자동 보너스(+1) 삭제! (말 안 걸면 안 오름)
-    
-    # 2. 의도적인 상호작용 키워드 세분화
-    # 단순 단어 포함이 아니라 '행동'을 지시했을 때만 오르도록 구체화
-    action_plus_3 = ["선물하기", "데이트신청", "결투신청", "주사위게임"]
-    action_plus_1 = ["인사하기", "대화하기", "질문하기"] # 가벼운 소통은 1점만
+# # --- [7. 채팅 입력 및 로직 통합] ---
 
-    if any(word in prompt for word in action_plus_3):
+if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
+    # 1. 수치 업데이트 (중복 방지를 위해 if-elif 구조 사용)
+    plus_3 = ["선물", "데이트", "결투", "토론", "주사위"]
+    plus_1 = ["인사", "대화", "질문", "안녕", "말 걸기"]
+
+    # (1) +3점 행동: 하트 소모
+    if any(word in prompt for word in plus_3):
         if st.session_state.patience > 0:
             st.session_state.patience -= 1
             st.session_state.favorability += 3
-    elif any(word in prompt for word in action_plus_1):
+    # (2) +1점 행동: 하루 한 번 제한
+    elif any(word in prompt for word in plus_1):
         if not st.session_state.daily_talk_done:
             st.session_state.favorability += 1
             st.session_state.daily_talk_done = True
 
-    # 2. 특별 행동 (인내심 소모)
-    action_keywords = ["선물", "데이트", "결투", "토론"]
-    if any(word in prompt for word in action_keywords):
-        if st.session_state.patience > 0:
-            st.session_state.patience -= 1 # 하트 소모
-            st.session_state.favorability += 3 # 행동 점수 추가
-            
-    # 3. 나이별 호감도 상한선 강제 적용 (서사 속도 조절)
+    # 2. 나이별 호감도 상한선 (서사 속도 조절)
     age = st.session_state.age
     fav = st.session_state.favorability
     if age == 13 and fav > 25: st.session_state.favorability = 25
@@ -534,22 +524,19 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     elif (age == 16 or age == 17) and fav > 85: st.session_state.favorability = 85
     elif age >= 18 and fav > 100: st.session_state.favorability = 100
 
-    # 나. 유저 메시지 표시 및 저장
+    # 3. 유저 메시지 표시 및 저장
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # 다. 인공지능 답변 생성부
+    # 4. 인공지능 답변 생성부 시작
     with st.chat_message("assistant", avatar="zed_avatar.png"):
         success = False
-        
-        
-        age = st.session_state.age
-
         fav_score = st.session_state.favorability
-        patience_info = f"현재 레일리의 인내심: {st.session_state.patience}/3"
-        system_warning = " (인내심이 소진되었으니 대화를 마무리해.)" if st.session_state.patience == 0 else ""
+        age = st.session_state.age # 여기서 age를 다시 정의해줘야 아래 로직이 에러 안 남
         
+        # --- 여기서부터 marriage_context 로직 시작 ---
+
         # 결혼 이후 호칭 및 태도 변화 지침
         marriage_context = ""
         if fav_score >= 100 and age >= 18:
