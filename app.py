@@ -224,7 +224,7 @@ SYSTEM_INSTRUCTION = """
 - 50~84 친구
 - 85~100 단짝
 - 100~999 연인
-하루에 대화할 때 아무리 많은 대화를 해도 호감도 최대 +2, 선물도 하루 기준으로 한 번만 오르며 +1 ~ +10까지 취향에 따라 상승함.
+하루에 대화할 때 아무리 많은 대화를 해도 호감도 최대 +1, 선물도 하루 기준으로 한 번만 오르며 +1 ~ +10까지 취향에 따라 상승함.
 
 [대사]
 - 아래 대사를 적절히 사용, 이벤트의 경우에는 아래 대사들을 그대로 서술. 아래 대사를 바탕으로 제드의 말투를 만들며 절대 캐붕의 말투를 만들어내면 안 됨.
@@ -360,12 +360,15 @@ if "messages" not in st.session_state:
         st.session_state.season = "동화년 (겨울)"
         st.session_state.patience = 3 # 이 줄을 추가하세요
         st.session_state.favorability = 0
+        st.session_state.daily_talk_done = False
+
         
     else:
         st.session_state.age = 13
         st.session_state.season = "동화년 (겨울)"
         st.session_state.patience = 3 # 이 줄을 추가하세요
         st.session_state.favorability = 0
+        st.session_state.daily_talk_done = False
         # 프롤로그 텍스트 설정
         PROLOGUE_TEXT = """ 화산국의 뜨거운 햇살이 중앙광장의 대리석 바닥을 달구던 하화년의 어느 날이었다. 세인트 엘모 기사 학교에 갓 입학한 13살의 레일리, 당신은 영주 레베사처럼 멋진 기사가 되겠다는 부푼 꿈을 안고 광장을 가로지르고 있었다. 
 
@@ -407,6 +410,9 @@ if st.sidebar.button("🕒 시간 흐르기 (다음 계절)"):
         st.session_state.season = seasons_list[curr_idx + 1]
 
     st.session_state.patience = 3
+    st.session_state.daily_talk_done = False # 이 줄을 추가하세요
+    st.rerun()
+
     st.rerun()
 
 if st.sidebar.button("🧹 대화 초기화 (시트 비우기)"):
@@ -434,19 +440,28 @@ for msg in st.session_state.messages:
 # --- [7. 채팅 입력 및 API 키 로테이션 로직] ---
                
 if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
-    # 사용자의 입력에 특정 키워드가 포함되면 인내심 1 소모
-    keywords = ["질문", "대화", "데이트", "선물", "물어", "뭐해", "같이"]
-    if any(word in prompt for word in keywords):
-        st.session_state.patience = max(0, st.session_state.patience - 1)
-        
-        # --- 호감도 상승 로직 추가 ---
-        age = st.session_state.age
-        fav = st.session_state.favorability
-        
-        # 나이에 따른 호감도 상한선 (13살-25%, 15살-50%, 17살-85%, 18살-100%)
-        if (age == 13 and fav < 25) or (14 <= age <= 15 and fav < 50) or \
-           (16 <= age <= 17 and fav < 85) or (age >= 18 and fav < 100):
-            st.session_state.favorability += 1 # 대화 한 번당 1%씩 상승
+    # 가. [일상 대화 점수] 하루 한 번 무조건 +1 (하트 소모 X)
+    if not st.session_state.daily_talk_done:
+        st.session_state.favorability += 1
+        st.session_state.daily_talk_done = True
+
+    # 나. [특별 행동 점수] 선물/데이트 시 하트 소모 및 추가 점수
+    action_keywords = ["선물", "데이트", "결투", "사냥", "주사위"]
+    if any(word in prompt for word in action_keywords):
+        if st.session_state.patience > 0:
+            st.session_state.patience -= 1 # 하트 소모
+            st.session_state.favorability += 3 # 행동 점수 크게 상승
+            
+    # 다. [나이별 상한선 강제 적용] 점수가 너무 많이 올랐을 경우 깎기
+    age = st.session_state.age
+    fav = st.session_state.favorability
+    if age == 13 and fav > 25: st.session_state.favorability = 25
+    elif (age == 14 or age == 15) and fav > 50: st.session_state.favorability = 50
+    elif (age == 16 or age == 17) and fav > 85: st.session_state.favorability = 85
+    elif age >= 18 and fav > 100: st.session_state.favorability = 100
+
+    
+ 
                
  
     # 1. 유저 메시지 표시 및 저장
