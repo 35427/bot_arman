@@ -359,10 +359,13 @@ if "messages" not in st.session_state:
         st.session_state.age = 13
         st.session_state.season = "동화년 (겨울)"
         st.session_state.patience = 3 # 이 줄을 추가하세요
+        st.session_state.favorability = 0
+        
     else:
         st.session_state.age = 13
         st.session_state.season = "동화년 (겨울)"
         st.session_state.patience = 3 # 이 줄을 추가하세요
+        st.session_state.favorability = 0
         # 프롤로그 텍스트 설정
         PROLOGUE_TEXT = """ 화산국의 뜨거운 햇살이 중앙광장의 대리석 바닥을 달구던 하화년의 어느 날이었다. 세인트 엘모 기사 학교에 갓 입학한 13살의 레일리, 당신은 영주 레베사처럼 멋진 기사가 되겠다는 부푼 꿈을 안고 광장을 가로지르고 있었다. 
 
@@ -389,6 +392,8 @@ st.sidebar.title("📊 레일리 상태창")
 st.sidebar.write(f"**현재 나이:** {st.session_state.age}세")
 st.sidebar.write(f"**현재 시기:** {st.session_state.season}")
 st.sidebar.info(f"**오늘의 인내심:** {'❤️' * st.session_state.patience}")
+# 사이드바 설정 부분에 추가
+st.sidebar.write(f"**제드의 호감도:** {st.session_state.favorability}%")
 
 # 계절 리스트 (순환용)
 seasons_list = ["춘화년 (봄)", "하화년 (여름)", "추화년 (가을)", "동화년 (겨울)"]
@@ -400,6 +405,8 @@ if st.sidebar.button("🕒 시간 흐르기 (다음 계절)"):
         st.session_state.age += 1
     else:
         st.session_state.season = seasons_list[curr_idx + 1]
+
+    st.session_state.patience = 3
     st.rerun()
 
 if st.sidebar.button("🧹 대화 초기화 (시트 비우기)"):
@@ -425,11 +432,23 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
         
 # --- [7. 채팅 입력 및 API 키 로테이션 로직] ---
+               
 if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     # 사용자의 입력에 특정 키워드가 포함되면 인내심 1 소모
     keywords = ["질문", "대화", "데이트", "선물", "물어", "뭐해", "같이"]
     if any(word in prompt for word in keywords):
         st.session_state.patience = max(0, st.session_state.patience - 1)
+        
+        # --- 호감도 상승 로직 추가 ---
+        age = st.session_state.age
+        fav = st.session_state.favorability
+        
+        # 나이에 따른 호감도 상한선 (13살-25%, 15살-50%, 17살-85%, 18살-100%)
+        if (age == 13 and fav < 25) or (14 <= age <= 15 and fav < 50) or \
+           (16 <= age <= 17 and fav < 85) or (age >= 18 and fav < 100):
+            st.session_state.favorability += 1 # 대화 한 번당 1%씩 상승
+               
+ 
     # 1. 유저 메시지 표시 및 저장
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -437,23 +456,16 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     
     with st.chat_message("assistant", avatar="zed_avatar.png"):
         success = False
+        
         # [중요] 제드에게 현재 상태를 주입 (인내심이 0이면 제드가 대화를 끊도록 유도)
-        patience_status = f"현재 레일리의 인내심: {st.session_state.patience}/3"
-        if st.session_state.patience == 0:
-            system_warning = f"(시스템 알림: 인내심이 모두 소진되었습니다. 제드는 이제 매우 피곤해하며 대화를 끝내고 싶어 합니다. 대화를 마무리하세요.)\n"
-        else:
-            system_warning = ""
-        
-        # 제드에게 나이 정보를 몰래 전달하는 시스템 컨텍스트
-        
+        fav_score = st.session_state.favorability
         patience_info = f"현재 레일리의 인내심: {st.session_state.patience}/3"
         system_warning = " (인내심이 소진되었으니 대화를 마무리해.)" if st.session_state.patience == 0 else ""
-        
         age_context = (
-            f"(시스템 알림: 레일리 {st.session_state.age}세, {st.session_state.season}. {patience_info}.{system_warning} "
-            f"사용자가 식사나 전투를 제안하면 세계관 설정에 맞춰 반응해.)\n\n"
+            f"(시스템 알림: 레일리 {st.session_state.age}세, {st.session_state.season}. "
+            f"인내심 {st.session_state.patience}/3, 제드 호감도 {fav_score}%.{system_warning} " # 여기 변수 추가
+            f"호감도가 25, 50, 85%에 도달했을 때만 설정된 이벤트를 소설로 진행해.)\n\n"
         )
-
         # 2. 제미나이 히스토리 구성 (현재 질문 제외한 이전 대화들)
         gemini_history = []
         for msg in st.session_state.messages[:-1]:
@@ -498,6 +510,7 @@ if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
 
         if not success:
             st.error("🚨 보유한 모든 API 키의 할당량이 소진되었습니다. 내일 다시 시도하거나 새 키를 추가하세요.")
+
 
 
 
