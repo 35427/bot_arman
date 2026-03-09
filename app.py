@@ -515,7 +515,7 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("제드에게 말을 걸어보세요..."):
     # 1. 수치 업데이트 로직 (중복 방지 및 행동 기반)
     plus_3 = ["선물", "데이트", "결투", "토론", "주사위"]
-    plus_1 = ["인사", "대화", "질문", "안녕", "말 걸기"]
+    plus_1 = ["인사", "대화", "질문", "안녕", "말 걸기", "레일리", "제드 님", "제드"]
 
     # (1) +3점 행동: 인내심(하트) 소모
     if any(word in prompt for word in plus_3):
